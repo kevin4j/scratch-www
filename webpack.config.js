@@ -8,6 +8,7 @@ const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPl
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
 
 // PostCss
 const autoprefixer = require('autoprefixer');
@@ -95,12 +96,19 @@ module.exports = {
                 test: /\.scss$/,
                 use: [
                     MiniCssExtractPlugin.loader,
-                    'css-loader',
+                    {
+                        loader: 'css-loader',
+                        options: {
+                            url: false
+                        }
+                    },
                     {
                         loader: 'postcss-loader',
                         options: {
-                            plugins: function () {
-                                return [autoprefixer({browsers: ['last 3 versions', 'Safari >= 8', 'iOS >= 8']})];
+                            postcssOptions: {
+                                plugins: function () {
+                                    return [autoprefixer()];
+                                }
                             }
                         }
                     },
@@ -111,12 +119,19 @@ module.exports = {
                 test: /\.css$/,
                 use: [
                     MiniCssExtractPlugin.loader,
-                    'css-loader',
+                    {
+                        loader: 'css-loader',
+                        options: {
+                            url: false
+                        }
+                    },
                     {
                         loader: 'postcss-loader',
                         options: {
-                            plugins: function () {
-                                return [autoprefixer({browsers: ['last 3 versions', 'Safari >= 8', 'iOS >= 8']})];
+                            postcssOptions: {
+                                plugins: function () {
+                                    return [autoprefixer()];
+                                }
                             }
                         }
                     }
@@ -141,7 +156,12 @@ module.exports = {
                     minChunks: pageRoutes.length // Extract only chunks common to all html pages
                 }
             }
-        }
+        },
+        minimizer: [
+            new TerserPlugin({
+                parallel: 4
+            })
+        ]
     },
     plugins: [
         new MiniCssExtractPlugin(),
@@ -156,28 +176,50 @@ module.exports = {
             }, templateConfig));
         })
     ).concat([
-        new CopyWebpackPlugin([
-            {from: 'static'},
-            {from: 'intl', to: 'js'}
-        ]),
-        new CopyWebpackPlugin([{
-            from: 'node_modules/scratch-gui/dist/static/blocks-media',
-            to: 'static/blocks-media'
-        }]),
-        new CopyWebpackPlugin([{
-            from: 'node_modules/scratch-gui/dist/chunks',
-            to: 'static/chunks'
-        }]),
-        new CopyWebpackPlugin([{
-            from: 'node_modules/scratch-gui/dist/extension-worker.js'
-        }]),
-        new CopyWebpackPlugin([{
-            from: 'node_modules/scratch-gui/dist/extension-worker.js.map'
-        }]),
-        new CopyWebpackPlugin([{
-            from: 'node_modules/scratch-gui/dist/static/assets',
-            to: 'static/assets'
-        }]),
+        new CopyWebpackPlugin({
+            patterns: [
+                {from: 'static'},
+                {from: 'intl', to: 'js'}
+            ]
+        }),
+        new CopyWebpackPlugin({
+            patterns: [
+                {
+                    from: 'node_modules/scratch-gui/dist/static/blocks-media',
+                    to: 'static/blocks-media'
+                }
+            ]
+        }),
+        new CopyWebpackPlugin({
+            patterns: [
+                {
+                    from: 'node_modules/scratch-gui/dist/chunks',
+                    to: 'static/chunks'
+                }
+            ]
+        }),
+        new CopyWebpackPlugin({
+            patterns: [
+                {
+                    from: 'node_modules/scratch-gui/dist/extension-worker.js'
+                }
+            ]
+        }),
+        new CopyWebpackPlugin({
+            patterns: [
+                {
+                    from: 'node_modules/scratch-gui/dist/extension-worker.js.map'
+                }
+            ]
+        }),
+        new CopyWebpackPlugin({
+            patterns: [
+                {
+                    from: 'node_modules/scratch-gui/dist/static/assets',
+                    to: 'static/assets'
+                }
+            ]
+        }),
         new webpack.DefinePlugin({
             'process.env.NODE_ENV': '"' + (process.env.NODE_ENV || 'development') + '"',
             'process.env.API_HOST': '"' + (process.env.API_HOST || 'https://api.scratch.mit.edu') + '"',
@@ -187,7 +229,7 @@ module.exports = {
             'process.env.BACKPACK_HOST': '"' + (process.env.BACKPACK_HOST || 'https://backpack.scratch.mit.edu') + '"',
             'process.env.CLOUDDATA_HOST': '"' + (process.env.CLOUDDATA_HOST || 'clouddata.scratch.mit.edu') + '"',
             'process.env.PROJECT_HOST': '"' + (process.env.PROJECT_HOST || 'https://projects.scratch.mit.edu') + '"',
-            'process.env.STATIC_HOST': '"' + (process.env.STATIC_HOST || 'https://cdn2.scratch.mit.edu') + '"',
+            'process.env.STATIC_HOST': '"' + (process.env.STATIC_HOST || 'https://uploads.scratch.mit.edu') + '"',
             'process.env.SCRATCH_ENV': '"' + (process.env.SCRATCH_ENV || 'development') + '"',
             'process.env.SENTRY_DSN': '"' + (process.env.SENTRY_DSN || '') + '"'
         })

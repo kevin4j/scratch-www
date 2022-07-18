@@ -7,14 +7,9 @@ const {
     buildDriver
 } = new SeleniumHelper();
 
-let remote = process.env.SMOKE_REMOTE || false;
 let rootUrl = process.env.ROOT_URL || 'https://scratch.ly';
 
-if (remote) {
-    jest.setTimeout(60000);
-} else {
-    jest.setTimeout(10000);
-}
+jest.setTimeout(60000);
 
 let driver;
 
@@ -141,7 +136,7 @@ describe('www-integration footer links', () => {
         await clickText('Scratch Conference');
         let url = await driver.getCurrentUrl();
         let pathname = (new URL(url)).pathname;
-        expect(pathname).toMatch(/^\/conference\/2021\/?$/);
+        expect(pathname).toMatch(/^\/scratch-conference\/?$/);
     });
 
 });

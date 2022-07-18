@@ -27,7 +27,7 @@ const NotAvailable = require('../../components/not-available/not-available.jsx')
 const Meta = require('./meta.jsx');
 
 const sessionActions = require('../../redux/session.js');
-import {selectProjectCommentsGloballyEnabled} from '../../redux/session';
+import {selectProjectCommentsGloballyEnabled, selectIsTotallyNormal} from '../../redux/session';
 const navigationActions = require('../../redux/navigation.js');
 const previewActions = require('../../redux/preview.js');
 const projectCommentActions = require('../../redux/project-comment-actions.js');
@@ -62,6 +62,8 @@ class Preview extends React.Component {
             'handleMessage',
             'handlePopState',
             'handleCloseAdminPanel',
+            'handleCloseEmailConfirmationModal',
+            'handleBannerDismiss',
             'handleIsRemixing',
             'handleOpenAdminPanel',
             'handleReportClick',
@@ -78,6 +80,7 @@ class Preview extends React.Component {
             'handleSeeInside',
             'handleSetProjectThumbnailer',
             'handleShare',
+            'handleShareAttempt',
             'handleUpdateProjectData',
             'handleUpdateProjectId',
             'handleUpdateProjectTitle',
@@ -121,6 +124,7 @@ class Preview extends React.Component {
             },
             showCloudDataAlert: false,
             showUsernameBlockAlert: false,
+            showEmailConfirmationModal: false,
             projectId: parts[1] === 'editor' ? '0' : parts[1],
             reportOpen: false,
             singleCommentId: singleCommentId,
@@ -138,7 +142,6 @@ class Preview extends React.Component {
             this.props.sessionStatus === sessionActions.Status.FETCHED) ||
             (this.state.projectId !== prevState.projectId))) {
             this.fetchCommunityData();
-            this.getProjectData(this.state.projectId, true /* Show cloud/username alerts */);
             if (this.state.justShared) {
                 this.setState({ // eslint-disable-line react/no-did-update-set-state
                     justShared: false
@@ -153,6 +156,10 @@ class Preview extends React.Component {
                     justShared: false
                 });
             }
+        }
+        if (this.props.projectInfo.id !== prevProps.projectInfo.id) {
+            storage.setProjectToken(this.props.projectInfo.project_token);
+            this.loadProjectData(this.state.projectId, true /* Show cloud/username alerts */);
         }
         if (this.props.projectInfo.id !== prevProps.projectInfo.id) {
             if (typeof this.props.projectInfo.id === 'undefined') {
@@ -192,7 +199,8 @@ class Preview extends React.Component {
 
         // Switching out of editor mode, refresh data that comes from project json
         if (this.props.playerMode && !prevProps.playerMode) {
-            this.getProjectData(
+            storage.setProjectToken(this.props.projectInfo.project_token);
+            this.loadProjectData(
                 this.state.projectId,
                 false // Do not show cloud/username alerts again
             );
@@ -319,7 +327,7 @@ class Preview extends React.Component {
             }
         }
     }
-    getProjectData (projectId, showAlerts) {
+    loadProjectData (projectId, showAlerts) {
         if (projectId <= 0) return 0;
         storage
             .load(storage.AssetType.Project, projectId, storage.DataFormat.JSON)
@@ -619,6 +627,25 @@ class Preview extends React.Component {
             justShared: true
         });
     }
+    handleShareAttempt () {
+        this.setState({
+            showEmailConfirmationModal: true
+        });
+    }
+    handleCloseEmailConfirmationModal () {
+        this.setState({showEmailConfirmationModal: false});
+    }
+    handleBannerDismiss (cue) {
+        api({
+            host: '',
+            uri: '/site-api/users/set-template-cue/',
+            method: 'post',
+            useCsrf: true,
+            json: {cue: cue, value: false}
+        }, err => {
+            if (!err) this.props.refreshSession();
+        });
+    }
     handleUpdateProjectTitle (title) {
         this.props.updateProject(
             this.props.projectInfo.id,
@@ -690,6 +717,11 @@ class Preview extends React.Component {
         );
     }
     render () {
+
+        // Only show GUI if the project has no id, is a loaded local project, or has the project token loaded
+        const showGUI = (!this.state.projectId || this.state.projectId === '0' || this.state.isProjectLoaded ||
+        (this.props.projectInfo && this.props.projectInfo.project_token));
+
         if (this.props.projectNotAvailable || this.state.invalidProject) {
             return (
                 <Page>
@@ -727,6 +759,7 @@ class Preview extends React.Component {
                             canRestoreComments={this.props.isAdmin}
                             canSave={this.props.canSave}
                             canShare={this.props.canShare || this.props.isAdmin}
+                            canSeeShare={this.props.userOwnsProject || this.props.isAdmin}
                             canToggleComments={this.props.canToggleComments}
                             canUseBackpack={this.props.canUseBackpack}
                             cloudHost={this.props.cloudHost}
@@ -762,6 +795,8 @@ class Preview extends React.Component {
                             showAdminPanel={this.props.isAdmin}
                             showCloudDataAlert={this.state.showCloudDataAlert}
                             showModInfo={this.props.isAdmin}
+                            showEmailConfirmationModal={this.state.showEmailConfirmationModal}
+                            showEmailConfirmationBanner={this.props.showEmailConfirmationBanner}
                             showUsernameBlockAlert={this.state.showUsernameBlockAlert}
                             singleCommentId={this.state.singleCommentId}
                             socialOpen={this.state.socialOpen}
@@ -770,7 +805,9 @@ class Preview extends React.Component {
                             onAddComment={this.handleAddComment}
                             onAddToStudioClicked={this.handleAddToStudioClick}
                             onAddToStudioClosed={this.handleAddToStudioClose}
+                            onBannerDismiss={this.handleBannerDismiss}
                             onCloseAdminPanel={this.handleCloseAdminPanel}
+                            onCloseEmailConfirmationModal={this.handleCloseEmailConfirmationModal}
                             onDeleteComment={this.handleDeleteComment}
                             onFavoriteClicked={this.handleFavoriteToggle}
                             onGreenFlag={this.handleGreenFlag}
@@ -790,6 +827,7 @@ class Preview extends React.Component {
                             onSeeInside={this.handleSeeInside}
                             onSetProjectThumbnailer={this.handleSetProjectThumbnailer}
                             onShare={this.handleShare}
+                            onShareAttempt={this.handleShareAttempt}
                             onSocialClicked={this.handleSocialClick}
                             onSocialClosed={this.handleSocialClose}
                             onToggleComments={this.handleToggleComments}
@@ -800,43 +838,46 @@ class Preview extends React.Component {
                         />
                     </Page> :
                     <React.Fragment>
-                        <IntlGUI
-                            assetHost={this.props.assetHost}
-                            authorId={this.props.authorId}
-                            authorThumbnailUrl={this.props.authorThumbnailUrl}
-                            authorUsername={this.props.authorUsername}
-                            backpackHost={this.props.backpackHost}
-                            backpackVisible={this.props.canUseBackpack}
-                            basePath="/"
-                            canCreateCopy={this.props.canCreateCopy}
-                            canCreateNew={this.props.canCreateNew}
-                            canEditTitle={this.props.canEditTitleInEditor}
-                            canRemix={this.props.canRemix}
-                            canSave={this.props.canSave}
-                            canShare={this.props.canShare}
-                            className="gui"
-                            cloudHost={this.props.cloudHost}
-                            enableCommunity={this.props.enableCommunity}
-                            hasCloudPermission={this.props.isScratcher}
-                            isShared={this.props.isShared}
-                            projectHost={this.props.projectHost}
-                            projectId={this.state.projectId}
-                            projectTitle={this.props.projectInfo.title}
-                            renderLogin={this.renderLogin}
-                            onClickLogo={this.handleClickLogo}
-                            onGreenFlag={this.handleGreenFlag}
-                            onLogOut={this.props.handleLogOut}
-                            onOpenRegistration={this.props.handleOpenRegistration}
-                            onProjectLoaded={this.handleProjectLoaded}
-                            onRemixing={this.handleIsRemixing}
-                            onSetLanguage={this.handleSetLanguage}
-                            onShare={this.handleShare}
-                            onToggleLoginOpen={this.props.handleToggleLoginOpen}
-                            onUpdateProjectData={this.handleUpdateProjectData}
-                            onUpdateProjectId={this.handleUpdateProjectId}
-                            onUpdateProjectThumbnail={this.props.handleUpdateProjectThumbnail}
-                            onUpdateProjectTitle={this.handleUpdateProjectTitle}
-                        />
+                        {showGUI && (
+                            <IntlGUI
+                                assetHost={this.props.assetHost}
+                                authorId={this.props.authorId}
+                                authorThumbnailUrl={this.props.authorThumbnailUrl}
+                                authorUsername={this.props.authorUsername}
+                                backpackHost={this.props.backpackHost}
+                                backpackVisible={this.props.canUseBackpack}
+                                basePath="/"
+                                canCreateCopy={this.props.canCreateCopy}
+                                canCreateNew={this.props.canCreateNew}
+                                canEditTitle={this.props.canEditTitleInEditor}
+                                canRemix={this.props.canRemix}
+                                canSave={this.props.canSave}
+                                canShare={this.props.canShare}
+                                className="gui"
+                                cloudHost={this.props.cloudHost}
+                                enableCommunity={this.props.enableCommunity}
+                                hasCloudPermission={this.props.isScratcher}
+                                isShared={this.props.isShared}
+                                projectHost={this.props.projectHost}
+                                projectToken={this.props.projectInfo.project_token}
+                                projectId={this.state.projectId}
+                                projectTitle={this.props.projectInfo.title}
+                                renderLogin={this.renderLogin}
+                                onClickLogo={this.handleClickLogo}
+                                onGreenFlag={this.handleGreenFlag}
+                                onLogOut={this.props.handleLogOut}
+                                onOpenRegistration={this.props.handleOpenRegistration}
+                                onProjectLoaded={this.handleProjectLoaded}
+                                onRemixing={this.handleIsRemixing}
+                                onSetLanguage={this.handleSetLanguage}
+                                onShare={this.handleShare}
+                                onToggleLoginOpen={this.props.handleToggleLoginOpen}
+                                onUpdateProjectData={this.handleUpdateProjectData}
+                                onUpdateProjectId={this.handleUpdateProjectId}
+                                onUpdateProjectThumbnail={this.props.handleUpdateProjectThumbnail}
+                                onUpdateProjectTitle={this.handleUpdateProjectTitle}
+                            />
+                        )}
                         {this.props.registrationOpen && (
                             this.props.useScratch3Registration ? (
                                 <Scratch3Registration
@@ -901,6 +942,7 @@ Preview.propTypes = {
     handleUpdateProjectThumbnail: PropTypes.func,
     isAdmin: PropTypes.bool,
     isEditable: PropTypes.bool,
+    isTotallyNormal: PropTypes.bool, // eslint-disable-line react/no-unused-prop-types
     isLoggedIn: PropTypes.bool,
     isProjectCommentsGloballyEnabled: PropTypes.bool,
     isNewScratcher: PropTypes.bool,
@@ -917,6 +959,7 @@ Preview.propTypes = {
     projectInfo: projectShape,
     projectNotAvailable: PropTypes.bool,
     projectStudios: PropTypes.arrayOf(PropTypes.object),
+    refreshSession: PropTypes.func,
     registrationOpen: PropTypes.bool,
     remixProject: PropTypes.func,
     remixes: PropTypes.arrayOf(PropTypes.object),
@@ -929,6 +972,7 @@ Preview.propTypes = {
     setLovedStatus: PropTypes.func.isRequired,
     setPlayer: PropTypes.func.isRequired,
     shareProject: PropTypes.func.isRequired,
+    showEmailConfirmationBanner: PropTypes.bool,
     toggleStudio: PropTypes.func.isRequired,
     updateProject: PropTypes.func.isRequired,
     useScratch3Registration: PropTypes.bool,
@@ -985,8 +1029,11 @@ const mapStateToProps = state => {
         (authorUsername === state.session.session.user.username ||
         state.permissions.admin === true);
     const areCommentsOn = state.session.session.flags && selectProjectCommentsGloballyEnabled(state);
-
-
+    const showEmailConfirmationBanner = state.session.session.flags &&
+        state.session.session.flags.has_outstanding_email_confirmation &&
+        state.session.session.flags.confirm_email_banner;
+    const isTotallyNormal = state.session.session.flags && selectIsTotallyNormal(state);
+    
     // if we don't have projectInfo, assume it's shared until we know otherwise
     const isShared = !projectInfoPresent || state.preview.projectInfo.is_published;
 
@@ -1013,6 +1060,7 @@ const mapStateToProps = state => {
         // project is editable iff logged in user is the author of the project, or
         // logged in user is an admin.
         isEditable: isEditable,
+        isTotallyNormal: isTotallyNormal,
         isLoggedIn: isLoggedIn,
         isAdmin: isAdmin,
         isNewScratcher: isLoggedIn && state.permissions.new_scratcher,
@@ -1032,6 +1080,7 @@ const mapStateToProps = state => {
         remixes: state.preview.remixes,
         replies: state.comments.replies,
         sessionStatus: state.session.status, // check if used
+        showEmailConfirmationBanner,
         useScratch3Registration: state.navigation.useScratch3Registration,
         user: state.session.session.user,
         userOwnsProject: userOwnsProject,
@@ -1145,6 +1194,9 @@ const mapDispatchToProps = dispatch => ({
     remixProject: () => {
         dispatch(GUI.remixProject());
         dispatch(projectCommentActions.resetComments());
+    },
+    refreshSession: () => {
+        dispatch(sessionActions.refreshSession());
     },
     setPlayer: player => {
         dispatch(GUI.setPlayer(player));

@@ -17,9 +17,21 @@ const TextAndMediaSnippet = props => (
     <div className={classNames('text-and-media-snippet', props.className)}>
         <div className="half">
             <h4>{props.title}</h4>
-            <p>
-                {props.children}
-            </p>
+            {props.children.length > 0 ?
+                <div>
+                    {props.children.map((paragraph, i) => (
+                        <p
+                            className={i === 0 && props.firstPBig ? 'p-big' : null}
+                            key={i}
+                        >
+                            {paragraph}
+                        </p>
+                    ))}
+                </div> :
+                <p className={props.firstPBig ? 'p-big' : null}>
+                    {props.children}
+                </p>
+            }
         </div>
 
         <div className="half">
@@ -95,14 +107,15 @@ const TextAndMediaSnippet = props => (
 );
 
 TextAndMediaSnippet.propTypes = {
-    children: PropTypes.node,
-    title: PropTypes.string,
-    largeImage: PropTypes.string,
-    className: PropTypes.string,
-    videoId: PropTypes.string,
-    type: PropTypes.string,
     alt: PropTypes.string,
-    spinnerColor: PropTypes.string
+    children: PropTypes.node,
+    className: PropTypes.string,
+    largeImage: PropTypes.string,
+    firstPBig: PropTypes.bool,
+    spinnerColor: PropTypes.string,
+    title: PropTypes.string,
+    type: PropTypes.string,
+    videoId: PropTypes.string
 };
 
 module.exports = TextAndMediaSnippet;
